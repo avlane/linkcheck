@@ -1,0 +1,13 @@
+{
+  "name": "linkcheck",
+  "version": "0.1.0",
+  "description": "Check the links in Markdown files",
+  "type": "module",
+  "bin": {
+    "linkcheck": "bin/linkcheck.js"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
