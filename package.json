@@ -6,6 +6,9 @@
   "bin": {
     "linkcheck": "bin/linkcheck.js"
   },
+  "scripts": {
+    "test": "node --test"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=18"

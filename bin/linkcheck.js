@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { extractLinks } from '../lib/extract.js';
 
 const file = process.argv[2];
 if (!file) {
@@ -7,7 +8,6 @@ if (!file) {
   process.exit(2);
 }
 
-const LINK = /\[[^\]]*\]\(([^)\s]+)[^)]*\)/g;
-fs.readFileSync(file, 'utf8').split('\n').forEach((line, index) => {
-  for (const match of line.matchAll(LINK)) console.log(`${file}:${index + 1}  ${match[1]}`);
-});
+for (const link of extractLinks(fs.readFileSync(file, 'utf8'))) {
+  console.log(`${file}:${link.line}:${link.column}  ${link.kind}  ${link.url}`);
+}
