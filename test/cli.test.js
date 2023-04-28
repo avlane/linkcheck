@@ -6,8 +6,16 @@ import { makeFetch, runCli } from './helpers.js';
 
 const docs = name => path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'examples', 'docs', name);
 
+const ALL_OK = {
+  'https://example.com/docs': 200,
+  'http://example.com/old': 200,
+  'https://example.org/autolink': 200,
+  'https://example.net/bare': 200,
+  'https://example.org/spec': 200
+};
+
 test('cli checks the external links of a file and lists the broken ones', async () => {
-  const fetch = makeFetch({ 'https://example.com/docs': 200, 'http://example.com/old': 404 });
+  const fetch = makeFetch({ ...ALL_OK, 'http://example.com/old': 404 });
   const { code, out } = await runCli([docs('index.md')], { fetch });
   assert.equal(code, 1);
   assert.match(out, /index\.md:8:\d+  broken  http:\/\/example\.com\/old  404\n/);
@@ -16,16 +24,21 @@ test('cli checks the external links of a file and lists the broken ones', async 
 });
 
 test('cli exits 0 when every external link works', async () => {
-  const fetch = makeFetch({ 'https://example.com/docs': 200, 'http://example.com/old': 200 });
-  const { code, out } = await runCli([docs('index.md')], { fetch });
+  const { code, out } = await runCli([docs('index.md')], { fetch: makeFetch(ALL_OK) });
   assert.equal(code, 0);
   assert.equal(out, 'all links ok\n');
 });
 
-test('cli only requests http and https links', async () => {
-  const fetch = makeFetch({ 'https://example.com/docs': 200, 'http://example.com/old': 200 });
+test('cli checks links in running text, autolinks and reference definitions, and only http(s)', async () => {
+  const fetch = makeFetch(ALL_OK);
   await runCli([docs('index.md')], { fetch });
-  assert.deepEqual(fetch.calls.map(call => call.url), ['https://example.com/docs', 'http://example.com/old']);
+  assert.deepEqual(fetch.calls.map(call => call.url), [
+    'https://example.com/docs',
+    'http://example.com/old',
+    'https://example.org/autolink',
+    'https://example.net/bare',
+    'https://example.org/spec'
+  ]);
 });
 
 test('cli reports network errors', async () => {
