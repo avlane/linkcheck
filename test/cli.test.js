@@ -22,7 +22,7 @@ test('cli checks external links, local files and anchors and lists what is broke
   assert.equal(code, 1);
   const lines = out.trimEnd().split('\n');
   assert.match(lines[0], /index\.md:4:\d+  broken  #nope  no heading with the anchor #nope in this file$/);
-  assert.match(lines[1], /index\.md:8:\d+  broken  http:\/\/example\.com\/old  404$/);
+  assert.match(lines[1], /index\.md:8:\d+  broken  http:\/\/example\.com\/old  404 Not Found$/);
   assert.match(lines[2], /index\.md:10:\d+  broken  images\/missing\.png  no such file: images\/missing\.png$/);
   assert.match(lines[3], /index\.md:12:\d+  broken  no definition for the reference \[nothing\]$/);
   assert.equal(lines[4], '4 broken links');
@@ -53,7 +53,22 @@ test('cli reports network errors', async () => {
   const failure = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
   const fetch = makeFetch({ ...ALL_OK, 'https://example.com/docs': failure });
   const { out } = await runCli([docs('index.md')], { fetch });
-  assert.match(out, /broken  https:\/\/example\.com\/docs  ECONNREFUSED/);
+  assert.match(out, /broken  https:\/\/example\.com\/docs  connection refused/);
+});
+
+test('cli --timeout is passed on and validated', async () => {
+  const fetch = makeFetch(ALL_OK);
+  await runCli(['--timeout', '2500', docs('faq.md')], { fetch });
+  assert.ok(fetch.calls[0].init.signal instanceof AbortSignal);
+  const bad = await runCli(['-t', 'soon', docs('faq.md')], { fetch });
+  assert.equal(bad.code, 2);
+  assert.match(bad.err, /--timeout needs a positive whole number/);
+});
+
+test('cli warnings do not fail the run', async () => {
+  const { code, out } = await runCli([docs('faq.md')], { fetch: makeFetch({ ...ALL_OK, 'https://example.com/benchmarks': 403 }) });
+  assert.equal(code, 0);
+  assert.equal(out, 'all links ok\n');
 });
 
 test('cli usage and unreadable files', async () => {
