@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { makeFetch, runCli } from './helpers.js';
+import { makeDir, makeFetch, removeDir, runCli } from './helpers.js';
 
 const docs = name => path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'examples', 'docs', name);
 
@@ -63,6 +63,46 @@ test('cli --timeout is passed on and validated', async () => {
   const bad = await runCli(['-t', 'soon', docs('faq.md')], { fetch });
   assert.equal(bad.code, 2);
   assert.match(bad.err, /--timeout needs a positive whole number/);
+});
+
+test('cli requests each URL once and applies the result to every occurrence', async () => {
+  const dir = makeDir({ 'a.md': '[x](https://example.com/p#one) [y](https://example.com/p#two)\n[z](https://example.com/p)\n[w](https://example.com/q)\n' });
+  try {
+    const fetch = makeFetch({ 'https://example.com/p': 200 });
+    const { code, out } = await runCli([path.join(dir, 'a.md')], { fetch });
+    assert.deepEqual(fetch.calls.map(call => call.url).sort(), ['https://example.com/p', 'https://example.com/q']);
+    assert.equal(code, 1);
+    assert.equal(out.trimEnd().split('\n').length, 2);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli --concurrency limits parallel requests', async () => {
+  const links = Array.from({ length: 12 }, (_, i) => `[l${i}](https://example.com/${i})`).join('\n');
+  const dir = makeDir({ 'many.md': links + '\n' });
+  try {
+    let active = 0;
+    let peak = 0;
+    const routes = {};
+    for (let i = 0; i < 12; i++) {
+      routes[`https://example.com/${i}`] = async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        active--;
+        return 200;
+      };
+    }
+    const { code } = await runCli(['-c', '3', path.join(dir, 'many.md')], { fetch: makeFetch(routes) });
+    assert.equal(code, 0);
+    assert.equal(peak, 3);
+    const bad = await runCli(['--concurrency', '0', path.join(dir, 'many.md')]);
+    assert.equal(bad.code, 2);
+    assert.match(bad.err, /--concurrency needs a positive whole number/);
+  } finally {
+    removeDir(dir);
+  }
 });
 
 test('cli warnings do not fail the run', async () => {

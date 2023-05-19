@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { Writable } from 'node:stream';
 import { run } from '../lib/cli.js';
 
@@ -19,6 +22,21 @@ export function makeFetch(routes = {}) {
   };
   fetchImpl.calls = calls;
   return fetchImpl;
+}
+
+// A temporary directory holding the given { 'relative/name': 'content' } files.
+export function makeDir(files = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'linkcheck-test-'));
+  for (const [name, content] of Object.entries(files)) {
+    const file = path.join(dir, name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, content);
+  }
+  return dir;
+}
+
+export function removeDir(dir) {
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 class Sink extends Writable {
