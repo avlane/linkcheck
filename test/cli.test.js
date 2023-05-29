@@ -105,6 +105,21 @@ test('cli --concurrency limits parallel requests', async () => {
   }
 });
 
+test('cli permanent redirects are warnings and do not fail the run', async () => {
+  const dir = makeDir({ 'a.md': '[old](http://example.com/old)\n' });
+  try {
+    const fetch = makeFetch({
+      'http://example.com/old': { status: 301, headers: { location: 'https://example.com/new' } },
+      'https://example.com/new': 200
+    });
+    const { code, out } = await runCli([path.join(dir, 'a.md')], { fetch });
+    assert.equal(code, 0);
+    assert.equal(out, 'all links ok\n');
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test('cli warnings do not fail the run', async () => {
   const { code, out } = await runCli([docs('faq.md')], { fetch: makeFetch({ ...ALL_OK, 'https://example.com/benchmarks': 403 }) });
   assert.equal(code, 0);
