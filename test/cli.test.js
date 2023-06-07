@@ -56,6 +56,26 @@ test('cli reports network errors', async () => {
   assert.match(out, /broken  https:\/\/example\.com\/docs  connection refused/);
 });
 
+test('cli --retries retries a flaky link', async () => {
+  const dir = makeDir({ 'a.md': '[x](https://example.com/flaky)\n' });
+  try {
+    let n = 0;
+    const routes = { 'https://example.com/flaky': () => (n++ < 2 ? 503 : 200) };
+    const sleeps = [];
+    const sleep = async ms => { sleeps.push(ms); };
+    const ok = await runCli([path.join(dir, 'a.md')], { fetch: makeFetch(routes), sleep });
+    assert.equal(ok.code, 0);
+    assert.deepEqual(sleeps, [500, 1000]);
+
+    n = 0;
+    const none = await runCli(['--retries', '0', path.join(dir, 'a.md')], { fetch: makeFetch(routes), sleep });
+    assert.equal(none.code, 1);
+    assert.match(none.out, /503 Service Unavailable/);
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test('cli --timeout is passed on and validated', async () => {
   const fetch = makeFetch(ALL_OK);
   await runCli(['--timeout', '2500', docs('faq.md')], { fetch });

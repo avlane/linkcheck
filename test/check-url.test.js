@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkUrl } from '../lib/check-url.js';
+import { checkUrl, retryDelay } from '../lib/check-url.js';
 import { makeFetch } from './helpers.js';
 
 test('checkUrl reports a successful HEAD request', async () => {
@@ -57,7 +57,7 @@ test('checkUrl describes network failures', async () => {
     'https://e.invalid/': new Error('boom')
   });
   const messages = [];
-  for (const host of 'abcde') messages.push((await checkUrl(`https://${host}.invalid/`, { fetch })).message);
+  for (const host of 'abcde') messages.push((await checkUrl(`https://${host}.invalid/`, { fetch, retries: 0 })).message);
   assert.deepEqual(messages, ['host not found (ENOTFOUND)', 'connection refused', 'connection reset', 'CERT_HAS_EXPIRED', 'boom']);
 });
 
@@ -125,13 +125,109 @@ test('checkUrl falls back to GET after a redirect to a picky server', async () =
   assert.deepEqual(fetch.calls.map(call => call.method), ['HEAD', 'HEAD', 'GET', 'GET']);
 });
 
+// A fetch that answers with the given statuses in turn (the last one repeats).
+function sequence(...answers) {
+  let n = 0;
+  return makeFetch({ 'https://example.com/flaky': () => answers[Math.min(n++, answers.length - 1)] });
+}
+
+const recordSleeps = () => {
+  const sleeps = [];
+  const sleep = async ms => { sleeps.push(ms); };
+  return { sleeps, sleep };
+};
+
+test('checkUrl retries a 503 and reports how many tries it took', async () => {
+  const { sleeps, sleep } = recordSleeps();
+  const fetch = sequence(503, 503, 200);
+  const result = await checkUrl('https://example.com/flaky', { fetch, sleep });
+  assert.deepEqual(result, { url: 'https://example.com/flaky', level: 'ok', status: 200, attempts: 3 });
+  assert.deepEqual(sleeps, [500, 1000]);
+});
+
+test('checkUrl gives up after the configured number of retries', async () => {
+  const { sleeps, sleep } = recordSleeps();
+  const result = await checkUrl('https://example.com/flaky', { fetch: sequence(503), sleep, retries: 2 });
+  assert.equal(result.level, 'broken');
+  assert.equal(result.message, '503 Service Unavailable');
+  assert.equal(result.attempts, 3);
+  assert.equal(sleeps.length, 2);
+  const none = await checkUrl('https://example.com/flaky', { fetch: sequence(503), sleep, retries: 0 });
+  assert.equal(none.attempts, undefined);
+});
+
+test('checkUrl does not retry errors that will not go away', async () => {
+  const { sleeps, sleep } = recordSleeps();
+  const gone = makeFetch({ 'https://example.com/gone': 404, 'https://example.com/boom': 500 });
+  assert.equal((await checkUrl('https://example.com/gone', { fetch: gone, sleep })).attempts, undefined);
+  assert.equal((await checkUrl('https://example.com/boom', { fetch: gone, sleep })).attempts, undefined);
+  const refused = makeFetch({ 'https://example.com/x': Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } }) });
+  await checkUrl('https://example.com/x', { fetch: refused, sleep });
+  assert.equal(refused.calls.length, 1);
+  assert.deepEqual(sleeps, []);
+});
+
+test('checkUrl retries transient network errors', async () => {
+  const { sleeps, sleep } = recordSleeps();
+  let n = 0;
+  const fetch = makeFetch({
+    'https://example.com/flaky': () => (n++ === 0 ? Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } }) : 200)
+  });
+  const result = await checkUrl('https://example.com/flaky', { fetch, sleep });
+  assert.equal(result.level, 'ok');
+  assert.equal(result.attempts, 2);
+  assert.deepEqual(sleeps, [500]);
+});
+
+test('checkUrl retries timeouts', async () => {
+  const { sleeps, sleep } = recordSleeps();
+  const fetch = makeFetch({
+    'https://slow.example.com/': (method, url, init) => new Promise((resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(init.signal.reason));
+    })
+  });
+  const result = await checkUrl('https://slow.example.com/', { fetch, sleep, timeout: 10, retries: 1 });
+  assert.equal(result.message, 'timed out after 10 ms');
+  assert.equal(result.attempts, 2);
+  assert.equal(sleeps.length, 1);
+});
+
+test('checkUrl uses Retry-After and ends rate limiting as a warning', async () => {
+  const { sleeps, sleep } = recordSleeps();
+  const limited = { status: 429, headers: { 'retry-after': '3' } };
+  const result = await checkUrl('https://example.com/flaky', { fetch: sequence(limited), sleep, retries: 2 });
+  assert.equal(result.level, 'warning');
+  assert.equal(result.message, '429 Too Many Requests (rate limited)');
+  assert.deepEqual(sleeps, [3000, 3000]);
+});
+
+test('retryDelay', () => {
+  assert.equal(retryDelay(null, 0), 500);
+  assert.equal(retryDelay(null, 1), 1000);
+  assert.equal(retryDelay(null, 2), 2000);
+  assert.equal(retryDelay(null, 10), 10000);
+  assert.equal(retryDelay('2', 0), 2000);
+  assert.equal(retryDelay('0', 5), 0);
+  assert.equal(retryDelay('120', 0), 10000);
+  assert.equal(retryDelay('120', 0, { maxRetryDelay: 200000 }), 120000);
+  assert.equal(retryDelay('  ', 1), 1000);
+  assert.equal(retryDelay('soon', 1), 1000);
+});
+
+test('retryDelay understands an HTTP date', () => {
+  const now = () => Date.parse('2023-06-03T12:00:00Z');
+  assert.equal(retryDelay('Sat, 03 Jun 2023 12:00:05 GMT', 0, { now }), 5000);
+  assert.equal(retryDelay('Sat, 03 Jun 2023 11:59:00 GMT', 0, { now }), 0);
+  assert.equal(retryDelay('Sat, 03 Jun 2023 13:00:00 GMT', 0, { now }), 10000);
+});
+
 test('checkUrl passes an abort signal and reports a timeout', async () => {
   const fetch = makeFetch({
     'https://slow.example.com/': (method, url, init) => new Promise((resolve, reject) => {
       init.signal.addEventListener('abort', () => reject(init.signal.reason));
     })
   });
-  const result = await checkUrl('https://slow.example.com/', { fetch, timeout: 20 });
+  const result = await checkUrl('https://slow.example.com/', { fetch, timeout: 20, retries: 0 });
   assert.deepEqual(result, { url: 'https://slow.example.com/', level: 'broken', status: null, message: 'timed out after 20 ms' });
   assert.ok(fetch.calls[0].init.signal instanceof AbortSignal);
 });
