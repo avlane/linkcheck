@@ -76,6 +76,48 @@ test('cli --retries retries a flaky link', async () => {
   }
 });
 
+test('cli --per-host keeps requests to one site down', async () => {
+  const links = Array.from({ length: 10 }, (_, i) => `[l${i}](https://example.com/${i})`).join('\n');
+  const dir = makeDir({ 'many.md': links + '\n' });
+  try {
+    let active = 0;
+    let peak = 0;
+    const routes = {};
+    for (let i = 0; i < 10; i++) {
+      routes[`https://example.com/${i}`] = async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        active--;
+        return 200;
+      };
+    }
+    const fetch = makeFetch(routes);
+    assert.equal((await runCli(['-c', '10', path.join(dir, 'many.md')], { fetch })).code, 0);
+    assert.equal(peak, 2);
+    peak = 0;
+    assert.equal((await runCli(['-c', '10', '--per-host', '1', path.join(dir, 'many.md')], { fetch })).code, 0);
+    assert.equal(peak, 1);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli --delay spaces out requests to one host', async () => {
+  const dir = makeDir({ 'a.md': '[a](https://example.com/a) [b](https://example.com/b) [c](https://other.example.org/c)\n' });
+  try {
+    const sleeps = [];
+    const sleep = async ms => { sleeps.push(ms); };
+    const fetch = makeFetch({ 'https://example.com/a': 200, 'https://example.com/b': 200, 'https://other.example.org/c': 200 });
+    const { code } = await runCli(['--delay', '1000', '--per-host', '1', path.join(dir, 'a.md')], { fetch, sleep });
+    assert.equal(code, 0);
+    assert.equal(sleeps.length, 1);
+    assert.ok(sleeps[0] > 0 && sleeps[0] <= 1000);
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test('cli --timeout is passed on and validated', async () => {
   const fetch = makeFetch(ALL_OK);
   await runCli(['--timeout', '2500', docs('faq.md')], { fetch });
@@ -114,7 +156,7 @@ test('cli --concurrency limits parallel requests', async () => {
         return 200;
       };
     }
-    const { code } = await runCli(['-c', '3', path.join(dir, 'many.md')], { fetch: makeFetch(routes) });
+    const { code } = await runCli(['-c', '3', '--per-host', '3', path.join(dir, 'many.md')], { fetch: makeFetch(routes) });
     assert.equal(code, 0);
     assert.equal(peak, 3);
     const bad = await runCli(['--concurrency', '0', path.join(dir, 'many.md')]);

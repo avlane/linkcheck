@@ -25,7 +25,17 @@ test('readArgs rejects bad numbers', () => {
   assert.throws(() => readArgs(['--nope']), UsageError);
 });
 
+test('readArgs per-host and delay', () => {
+  const args = readArgs(['--per-host', '1', '--delay', '250', 'a.md']);
+  assert.deepEqual([args.perHost, args.delay], [1, 250]);
+  assert.equal(readArgs(['--delay', '0', 'a.md']).delay, 0);
+  assert.throws(() => readArgs(['--per-host', '0']), /--per-host needs a positive whole number/);
+  assert.throws(() => readArgs(['--delay', '-5']), UsageError);
+});
+
 test('resolveOptions fills in defaults', () => {
   assert.deepEqual(resolveOptions(readArgs(['a.md'])), DEFAULTS);
-  assert.deepEqual(resolveOptions(readArgs(['-t', '5', '--retries=0'])), { timeout: 5, concurrency: 8, retries: 0 });
+  assert.deepEqual(resolveOptions(readArgs(['-t', '5', '--retries=0'])), {
+    timeout: 5, concurrency: 8, retries: 0, perHost: 2, delay: 0
+  });
 });
