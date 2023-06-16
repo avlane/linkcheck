@@ -118,6 +118,56 @@ test('cli --delay spaces out requests to one host', async () => {
   }
 });
 
+test('cli --ignore skips matching links', async () => {
+  const dir = makeDir({ 'a.md': '[a](https://localhost:3000/x) [b](https://wiki.internal.example.com/p) [c](https://example.com/c)\n' });
+  try {
+    const fetch = makeFetch({ 'https://example.com/c': 200 });
+    const { code, out } = await runCli(['--ignore', '^https://localhost', '--ignore', 'internal', '--no-config', path.join(dir, 'a.md')], { fetch });
+    assert.equal(code, 0);
+    assert.equal(out, 'all links ok\n');
+    assert.deepEqual(fetch.calls.map(call => call.url), ['https://example.com/c']);
+    const bad = await runCli(['--ignore', '(', '--no-config', path.join(dir, 'a.md')], { fetch });
+    assert.equal(bad.code, 2);
+    assert.match(bad.err, /bad ignore pattern/);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli reads .linkcheckrc.json from the working folder', async () => {
+  const dir = makeDir({
+    'a.md': '[a](https://localhost:3000/x) [b](https://example.com/b)\n',
+    '.linkcheckrc.json': '{"ignore": ["localhost"], "retries": 0}'
+  });
+  try {
+    const fetch = makeFetch({ 'https://example.com/b': 503 });
+    const { code, out } = await runCli([path.join(dir, 'a.md')], { fetch, cwd: dir });
+    assert.equal(code, 1);
+    assert.match(out, /https:\/\/example\.com\/b  503/);
+    assert.equal(fetch.calls.length, 1);
+    const skipped = await runCli(['--no-config', '--retries', '0', path.join(dir, 'a.md')], { fetch: makeFetch({}), cwd: dir });
+    assert.match(skipped.out, /localhost:3000\/x  404/);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli --config names the file, which must exist, and bad settings are usage errors', async () => {
+  const dir = makeDir({ 'a.md': '[a](https://example.com/a)\n', 'custom.json': '{"timeout": "slow"}', 'ok.json': '{"timeout": 1234}' });
+  try {
+    const missing = await runCli(['--config', path.join(dir, 'nope.json'), path.join(dir, 'a.md')]);
+    assert.equal(missing.code, 2);
+    assert.match(missing.err, /cannot read the configuration file/);
+    const bad = await runCli(['--config', path.join(dir, 'custom.json'), path.join(dir, 'a.md')]);
+    assert.equal(bad.code, 2);
+    assert.match(bad.err, /"timeout" must be a whole number/);
+    const fetch = makeFetch({ 'https://example.com/a': 200 });
+    assert.equal((await runCli(['--config', path.join(dir, 'ok.json'), path.join(dir, 'a.md')], { fetch })).code, 0);
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test('cli --timeout is passed on and validated', async () => {
   const fetch = makeFetch(ALL_OK);
   await runCli(['--timeout', '2500', docs('faq.md')], { fetch });
