@@ -168,6 +168,36 @@ test('cli --config names the file, which must exist, and bad settings are usage 
   }
 });
 
+test('cli checks every Markdown file in a folder and honours --exclude', async () => {
+  const dir = makeDir({
+    'a.md': '[x](https://example.com/a)\n',
+    'docs/b.md': '[y](https://example.com/b)\n',
+    'vendor/c.md': '[z](https://example.com/c)\n',
+    'notes.txt': '[t](https://example.com/t)\n'
+  });
+  try {
+    const all = makeFetch({ 'https://example.com/a': 200, 'https://example.com/b': 200, 'https://example.com/c': 200 });
+    assert.equal((await runCli(['--no-config', dir], { fetch: all })).code, 0);
+    assert.deepEqual(all.calls.map(call => call.url).sort(), ['https://example.com/a', 'https://example.com/b', 'https://example.com/c']);
+    const some = makeFetch({ 'https://example.com/a': 200, 'https://example.com/b': 200 });
+    assert.equal((await runCli(['--no-config', '--exclude', 'vendor/**', dir], { fetch: some })).code, 0);
+    assert.deepEqual(some.calls.map(call => call.url).sort(), ['https://example.com/a', 'https://example.com/b']);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli reads exclude from the config file', async () => {
+  const dir = makeDir({ 'a.md': '[x](https://example.com/a)\n', 'old/b.md': '[y](https://example.com/b)\n', '.linkcheckrc.json': '{"exclude": ["old/**"]}' });
+  try {
+    const fetch = makeFetch({ 'https://example.com/a': 200 });
+    assert.equal((await runCli([dir], { fetch, cwd: dir })).code, 0);
+    assert.deepEqual(fetch.calls.map(call => call.url), ['https://example.com/a']);
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test('cli --timeout is passed on and validated', async () => {
   const fetch = makeFetch(ALL_OK);
   await runCli(['--timeout', '2500', docs('faq.md')], { fetch });

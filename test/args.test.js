@@ -34,6 +34,11 @@ test('readArgs ignore patterns and configuration', () => {
   assert.equal(readArgs(['--no-config', 'a.md']).noConfig, true);
 });
 
+test('readArgs exclude', () => {
+  assert.deepEqual(readArgs(['--exclude', 'vendor/**', '--exclude=*.draft.md', 'docs']).exclude, ['vendor/**', '*.draft.md']);
+  assert.deepEqual(readArgs(['docs']).exclude, []);
+});
+
 test('readArgs per-host and delay', () => {
   const args = readArgs(['--per-host', '1', '--delay', '250', 'a.md']);
   assert.deepEqual([args.perHost, args.delay], [1, 250]);
@@ -45,12 +50,14 @@ test('readArgs per-host and delay', () => {
 test('resolveOptions fills in defaults', () => {
   assert.deepEqual(resolveOptions(readArgs(['a.md'])), DEFAULTS);
   assert.deepEqual(resolveOptions(readArgs(['-t', '5', '--retries=0'])), {
-    timeout: 5, concurrency: 8, retries: 0, perHost: 2, delay: 0, ignore: []
+    timeout: 5, concurrency: 8, retries: 0, perHost: 2, delay: 0, ignore: [], exclude: []
   });
 });
 
 test('resolveOptions layers the command line over the config file over the defaults', () => {
-  const config = { timeout: 3000, retries: 5, perHost: 1, ignore: ['a'] };
-  const options = resolveOptions(readArgs(['--retries', '1', '--ignore', 'b']), config);
-  assert.deepEqual(options, { timeout: 3000, concurrency: 8, retries: 1, perHost: 1, delay: 0, ignore: ['a', 'b'] });
+  const config = { timeout: 3000, retries: 5, perHost: 1, ignore: ['a'], exclude: ['x'] };
+  const options = resolveOptions(readArgs(['--retries', '1', '--ignore', 'b', '--exclude', 'y']), config);
+  assert.deepEqual(options, {
+    timeout: 3000, concurrency: 8, retries: 1, perHost: 1, delay: 0, ignore: ['a', 'b'], exclude: ['x', 'y']
+  });
 });

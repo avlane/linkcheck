@@ -15,8 +15,10 @@ const withConfig = (content, fn) => {
 };
 
 test('loadConfig reads known settings', () => {
-  const config = withConfig('{"timeout": 5000, "concurrency": 4, "retries": 0, "perHost": 1, "delay": 200, "ignore": ["^https://localhost"]}', loadConfig);
-  assert.deepEqual(config, { timeout: 5000, concurrency: 4, retries: 0, perHost: 1, delay: 200, ignore: ['^https://localhost'] });
+  const config = withConfig('{"timeout": 5000, "concurrency": 4, "retries": 0, "perHost": 1, "delay": 200, "ignore": ["^https://localhost"], "exclude": ["CHANGELOG.md"]}', loadConfig);
+  assert.deepEqual(config, {
+    timeout: 5000, concurrency: 4, retries: 0, perHost: 1, delay: 200, ignore: ['^https://localhost'], exclude: ['CHANGELOG.md']
+  });
 });
 
 test('loadConfig a missing file is fine unless required', () => {
