@@ -256,16 +256,34 @@ test('cli permanent redirects are warnings and do not fail the run', async () =>
     });
     const { code, out } = await runCli([path.join(dir, 'a.md')], { fetch });
     assert.equal(code, 0);
-    assert.equal(out, 'all links ok\n');
+    assert.match(out, /a\.md:1:\d+  warning  http:\/\/example\.com\/old  moved permanently to https:\/\/example\.com\/new\n1 warning\n$/);
   } finally {
     removeDir(dir);
   }
 });
 
-test('cli warnings do not fail the run', async () => {
+test('cli lists warnings but they do not fail the run', async () => {
   const { code, out } = await runCli([docs('faq.md')], { fetch: makeFetch({ ...ALL_OK, 'https://example.com/benchmarks': 403 }) });
   assert.equal(code, 0);
-  assert.equal(out, 'all links ok\n');
+  assert.match(out, /faq\.md:9:\d+  warning  https:\/\/example\.com\/benchmarks  403 Forbidden \(may need a login\)\n1 warning\n$/);
+});
+
+test('cli --strict fails on warnings', async () => {
+  const fetch = makeFetch({ ...ALL_OK, 'https://example.com/benchmarks': 403 });
+  assert.equal((await runCli(['--strict', docs('faq.md')], { fetch })).code, 1);
+  assert.equal((await runCli(['--strict', docs('faq.md')], { fetch: makeFetch(ALL_OK) })).code, 0);
+});
+
+test('cli --format json prints a summary and every result', async () => {
+  const fetch = makeFetch({ ...ALL_OK, 'http://example.com/old': 404 });
+  const { code, out } = await runCli(['--format', 'json', docs('index.md')], { fetch });
+  assert.equal(code, 1);
+  const report = JSON.parse(out);
+  assert.deepEqual(report.summary, { files: 1, links: 12, ok: 8, warnings: 0, broken: 4, skipped: 0 });
+  assert.equal(report.results.length, 12);
+  const old = report.results.find(r => r.url === 'http://example.com/old');
+  assert.deepEqual([old.status, old.httpStatus, old.line], ['broken', 404, 8]);
+  assert.equal((await runCli(['--json', docs('faq.md')], { fetch: makeFetch(ALL_OK) })).code, 0);
 });
 
 test('cli usage and unreadable files', async () => {

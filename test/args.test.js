@@ -34,6 +34,15 @@ test('readArgs ignore patterns and configuration', () => {
   assert.equal(readArgs(['--no-config', 'a.md']).noConfig, true);
 });
 
+test('readArgs format, json and strict', () => {
+  const plain = readArgs(['a.md']);
+  assert.deepEqual([plain.format, plain.strict], ['text', false]);
+  assert.equal(readArgs(['--format', 'json', 'a.md']).format, 'json');
+  assert.equal(readArgs(['--json', 'a.md']).format, 'json');
+  assert.equal(readArgs(['--strict', 'a.md']).strict, true);
+  assert.throws(() => readArgs(['--format', 'xml']), /--format must be text or json/);
+});
+
 test('readArgs exclude', () => {
   assert.deepEqual(readArgs(['--exclude', 'vendor/**', '--exclude=*.draft.md', 'docs']).exclude, ['vendor/**', '*.draft.md']);
   assert.deepEqual(readArgs(['docs']).exclude, []);
