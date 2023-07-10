@@ -294,3 +294,14 @@ test('cli usage and unreadable files', async () => {
   assert.equal(missing.code, 2);
   assert.match(missing.err, /cannot read \/definitely\/not\/here\.md/);
 });
+
+test('cli --format github', async () => {
+  const fetch = makeFetch({ ...ALL_OK, 'http://example.com/old': 404 });
+  const { code, out } = await runCli(['--format', 'github', docs('index.md')], { fetch });
+  assert.equal(code, 1);
+  const lines = out.trimEnd().split('\n');
+  assert.equal(lines.length, 4);
+  assert.ok(lines.every(line => line.startsWith('::error file=')), out);
+  assert.match(lines[1], /,line=8,col=\d+,title=Broken link::http:\/\/example\.com\/old - 404 Not Found$/);
+  assert.equal((await runCli(['--format', 'github', docs('faq.md')], { fetch: makeFetch(ALL_OK) })).out, '');
+});

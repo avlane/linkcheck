@@ -40,7 +40,8 @@ test('readArgs format, json and strict', () => {
   assert.equal(readArgs(['--format', 'json', 'a.md']).format, 'json');
   assert.equal(readArgs(['--json', 'a.md']).format, 'json');
   assert.equal(readArgs(['--strict', 'a.md']).strict, true);
-  assert.throws(() => readArgs(['--format', 'xml']), /--format must be text or json/);
+  assert.equal(readArgs(['--format=github', 'a.md']).format, 'github');
+  assert.throws(() => readArgs(['--format', 'xml']), /--format must be text, json or github/);
 });
 
 test('readArgs exclude', () => {

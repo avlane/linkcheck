@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { exitCode, formatJson, formatText, summarize } from '../lib/report.js';
+import { exitCode, formatGithub, formatJson, formatText, summarize } from '../lib/report.js';
 
 const result = (status, extra = {}) => ({ file: 'a.md', line: 1, column: 1, url: 'https://example.com/', kind: 'link', status, ...extra });
 
@@ -35,6 +35,21 @@ test('formatText with nothing to report', () => {
   assert.ok(formatText(onlyWarning, summarize(onlyWarning, 1)).endsWith('1 warning\n'));
   const one = [result('broken', { message: 'x' })];
   assert.ok(formatText(one, summarize(one, 1)).endsWith('1 broken link\n'));
+});
+
+test('formatGithub prints workflow commands', () => {
+  assert.equal(formatGithub(results), [
+    '::error file=a.md,line=2,col=1,title=Broken link::https://example.com/ - 404 Not Found',
+    '::warning file=a.md,line=3,col=5,title=Link warning::https://example.com/ - moved permanently to https://example.com/new',
+    '::error file=a.md,line=9,col=1,title=Broken link::no definition for the reference [x]',
+    ''
+  ].join('\n'));
+  assert.equal(formatGithub([result('ok'), result('skipped')]), '');
+});
+
+test('formatGithub escapes what the runner would misread', () => {
+  const line = formatGithub([result('broken', { file: 'docs/a,b:c.md', message: '100% bad\nreally' })]);
+  assert.equal(line, '::error file=docs/a%2Cb%3Ac.md,line=1,col=1,title=Broken link::https://example.com/ - 100%25 bad%0Areally\n');
 });
 
 test('formatJson has the summary and every result', () => {
