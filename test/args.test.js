@@ -25,6 +25,16 @@ test('readArgs rejects bad numbers', () => {
   assert.throws(() => readArgs(['--nope']), UsageError);
 });
 
+test('readArgs cache options', () => {
+  const none = readArgs(['a.md']);
+  assert.deepEqual([none.cache, none.cacheFile, none.cacheTtl], [false, undefined, undefined]);
+  const on = readArgs(['--cache', '--cache-ttl', '6', 'a.md']);
+  assert.deepEqual([on.cache, on.cacheTtl], [true, 6]);
+  const named = readArgs(['--cache-file', 'links.json', 'a.md']);
+  assert.deepEqual([named.cache, named.cacheFile], [true, 'links.json']);
+  assert.throws(() => readArgs(['--cache-ttl', '0']), /--cache-ttl needs a positive whole number/);
+});
+
 test('readArgs ignore patterns and configuration', () => {
   const args = readArgs(['--ignore', '^http://localhost', '--ignore=example\\.org', '--config', 'my.json', 'a.md']);
   assert.deepEqual(args.ignore, ['^http://localhost', 'example\\.org']);

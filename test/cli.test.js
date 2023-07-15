@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeDir, makeFetch, removeDir, runCli } from './helpers.js';
@@ -193,6 +194,47 @@ test('cli reads exclude from the config file', async () => {
     const fetch = makeFetch({ 'https://example.com/a': 200 });
     assert.equal((await runCli([dir], { fetch, cwd: dir })).code, 0);
     assert.deepEqual(fetch.calls.map(call => call.url), ['https://example.com/a']);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli --cache skips links that worked last time', async () => {
+  const dir = makeDir({ 'a.md': '[ok](https://example.com/ok) [bad](https://example.com/bad) [moved](http://example.com/moved)\n' });
+  try {
+    const routes = {
+      'https://example.com/ok': 200,
+      'https://example.com/bad': 500,
+      'http://example.com/moved': { status: 301, headers: { location: 'https://example.com/new' } },
+      'https://example.com/new': 200
+    };
+    const args = ['--cache', '--retries', '0', '--no-config', path.join(dir, 'a.md')];
+    const first = makeFetch(routes);
+    await runCli(args, { fetch: first, cwd: dir, now: () => 1000 });
+    assert.equal(first.calls.filter(call => call.url === 'https://example.com/ok').length, 1);
+
+    const second = makeFetch(routes);
+    const { code } = await runCli(args, { fetch: second, cwd: dir, now: () => 2000 });
+    assert.equal(code, 1);
+    assert.equal(second.calls.filter(call => call.url === 'https://example.com/ok').length, 0);
+    assert.equal(second.calls.filter(call => call.url === 'https://example.com/bad').length, 1);
+    assert.equal(second.calls.filter(call => call.url === 'http://example.com/moved').length, 1);
+
+    const stale = makeFetch(routes);
+    await runCli([...args, '--cache-ttl', '1'], { fetch: stale, cwd: dir, now: () => 1000 + 2 * 3600 * 1000 });
+    assert.equal(stale.calls.filter(call => call.url === 'https://example.com/ok').length, 1);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli without --cache never touches the cache file', async () => {
+  const dir = makeDir({ 'a.md': '[ok](https://example.com/ok)\n' });
+  try {
+    await runCli(['--no-config', path.join(dir, 'a.md')], { fetch: makeFetch({ 'https://example.com/ok': 200 }), cwd: dir });
+    assert.deepEqual(fs.readdirSync(dir), ['a.md']);
+    await runCli(['--cache-file', 'mine.json', '--no-config', path.join(dir, 'a.md')], { fetch: makeFetch({ 'https://example.com/ok': 200 }), cwd: dir });
+    assert.deepEqual(fs.readdirSync(dir).sort(), ['a.md', 'mine.json']);
   } finally {
     removeDir(dir);
   }
