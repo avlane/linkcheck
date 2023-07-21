@@ -102,6 +102,26 @@ test('extractLinks does not see bare URLs in code', () => {
     ['https://example.com/real']);
 });
 
+test('extractLinks reads href and src attributes in HTML', () => {
+  const { links } = extractLinks('<a href="https://example.com/a">x</a> <img src=\'pic.png\' alt="p"> <link rel="stylesheet" href="style.css">');
+  assert.deepEqual(links.map(l => [l.kind, l.url, l.column]), [
+    ['html', 'https://example.com/a', 10],
+    ['html', 'pic.png', 49],
+    ['html', 'style.css', 96]
+  ]);
+});
+
+test('extractLinks HTML links are not also found as bare URLs, and empty ones are skipped', () => {
+  assert.deepEqual(summary('<a href="https://example.com/a">https://example.com/b</a> <a href="">x</a> <a name="top"></a>').map(l => [l[0], l[1]]), [
+    ['html', 'https://example.com/a'],
+    ['bare', 'https://example.com/b']
+  ]);
+});
+
+test('extractLinks HTML in code is ignored', () => {
+  assert.deepEqual(urls('`<a href="a.md">x</a>` and\n```html\n<img src="b.png">\n```'), []);
+});
+
 test('extractLinks reads the example document', async () => {
   const fs = await import('node:fs');
   const text = fs.readFileSync(new URL('../examples/docs/index.md', import.meta.url), 'utf8');

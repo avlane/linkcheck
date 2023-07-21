@@ -26,6 +26,11 @@ test('headingAnchors ignores headings in code blocks', () => {
   assert.deepEqual([...anchors], ['real', 'also-real']);
 });
 
+test('headingAnchors also offers HTML ids and names', () => {
+  const anchors = headingAnchors('# Title\n<a name="Old-Style"></a>\n<div id=\'box\'>text</div>\n<p>no id</p>\n');
+  assert.deepEqual([...anchors], ['title', 'old-style', 'box']);
+});
+
 test('headingAnchors allows trailing hashes and indentation', () => {
   assert.deepEqual([...headingAnchors('   ## Indented ##   \n')], ['indented']);
 });
