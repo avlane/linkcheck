@@ -33,6 +33,27 @@ test('checkLocal anchors in the same file', () => {
   assert.equal(missing.message, 'no heading with the anchor #nope in this file');
 });
 
+test('checkLocal anchors in other Markdown files', () => {
+  assert.equal(check('faq.md#how-do-i-install').status, 'ok');
+  assert.equal(check('faq.md#How-Do-I-Install').status, 'ok');
+  assert.equal(check('guide.md#setup').status, 'ok');
+  const missing = check('faq.md#why-slow');
+  assert.equal(missing.status, 'broken');
+  assert.equal(missing.message, 'no heading with the anchor #why-slow in faq.md');
+  assert.equal(check('../docs/guide.md#nope', 'faq.md').message, 'no heading with the anchor #nope in ../docs/guide.md');
+});
+
+test('checkLocal fragments on files that are not Markdown are not checked', () => {
+  assert.equal(check('images/logo.svg#L1').status, 'ok');
+  assert.equal(check('images#anything').status, 'ok');
+});
+
+test('checkLocal checkAnchors false skips every fragment', () => {
+  const link = { file: path.join(docs, 'index.md'), line: 1, column: 1, url: 'faq.md#nope', kind: 'link' };
+  assert.equal(checkLocal(link, classifyLink('faq.md#nope'), { anchors, checkAnchors: false }).status, 'ok');
+  assert.equal(checkLocal(link, classifyLink('#nope'), { anchors, checkAnchors: false }).status, 'ok');
+});
+
 test('checkLocal anchors in the same file come from its own headings', () => {
   assert.equal(check('#troubleshooting', 'guide.md').status, 'ok');
   assert.equal(check('#usage', 'guide.md').status, 'broken');

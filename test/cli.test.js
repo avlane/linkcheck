@@ -240,6 +240,18 @@ test('cli without --cache never touches the cache file', async () => {
   }
 });
 
+test('cli checks anchors in other files, and --no-anchors does not', async () => {
+  const { code, out } = await runCli(['--no-config', docs('reference.md')], { fetch: makeFetch({}) });
+  assert.equal(code, 1);
+  const lines = out.trimEnd().split('\n');
+  assert.equal(lines.length, 3);
+  assert.match(lines[0], /reference\.md:3:\d+  broken  faq\.md#why-slow  no heading with the anchor #why-slow in faq\.md$/);
+  assert.match(lines[1], /reference\.md:4:\d+  broken  guide\.md#setup-steps  no heading with the anchor #setup-steps in guide\.md$/);
+  assert.equal(lines[2], '2 broken links');
+  const lenient = await runCli(['--no-config', '--no-anchors', docs('reference.md')], { fetch: makeFetch({}) });
+  assert.equal(lenient.code, 0);
+});
+
 test('cli --timeout is passed on and validated', async () => {
   const fetch = makeFetch(ALL_OK);
   await runCli(['--timeout', '2500', docs('faq.md')], { fetch });

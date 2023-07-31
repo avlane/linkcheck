@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { headingAnchors, slugify } from '../lib/slug.js';
+import { headingAnchors, plainHeading, slugify } from '../lib/slug.js';
 
 test('slugify follows the GitHub rules', () => {
   assert.equal(slugify('Hello, World!'), 'hello-world');
@@ -24,6 +24,30 @@ test('headingAnchors numbers repeated headings', () => {
 test('headingAnchors ignores headings in code blocks', () => {
   const anchors = headingAnchors('# Real\n```\n# Not a heading\n```\n## Also real\n');
   assert.deepEqual([...anchors], ['real', 'also-real']);
+});
+
+test('plainHeading removes markup', () => {
+  assert.equal(plainHeading('The [`run`](api.md#run) command'), 'The run command');
+  assert.equal(plainHeading('**Bold** and *slanted* and ***both***'), 'Bold and slanted and both');
+  assert.equal(plainHeading('Using <kbd>Ctrl</kbd>+C'), 'Using Ctrl+C');
+  assert.equal(plainHeading('An ![icon](i.png) heading'), 'An icon heading');
+  assert.equal(plainHeading('snake_case_name stays'), 'snake_case_name stays');
+  assert.equal(plainHeading('_emphasised_ word'), 'emphasised word');
+  assert.equal(plainHeading('see [the docs][ref]'), 'see the docs');
+});
+
+test('headingAnchors uses the displayed text', () => {
+  const anchors = headingAnchors('# The [`run`](api.md#run) command\n## **Install** it\n### Using <kbd>Ctrl</kbd>+C\n');
+  assert.deepEqual([...anchors], ['the-run-command', 'install-it', 'using-ctrlc']);
+});
+
+test('headingAnchors Setext headings', () => {
+  const anchors = headingAnchors('Title\n=====\n\nIntro text\nmore text\n\nSection two\n-----------\n\n- list item\n---\n\n---\n');
+  assert.deepEqual([...anchors], ['title', 'section-two']);
+});
+
+test('headingAnchors a Setext underline needs a paragraph above it', () => {
+  assert.deepEqual([...headingAnchors('> quote\n---\n\n| a | b |\n---\n\n# Real\n')], ['real']);
 });
 
 test('headingAnchors also offers HTML ids and names', () => {

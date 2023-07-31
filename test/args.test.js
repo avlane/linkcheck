@@ -25,6 +25,11 @@ test('readArgs rejects bad numbers', () => {
   assert.throws(() => readArgs(['--nope']), UsageError);
 });
 
+test('readArgs --no-anchors', () => {
+  assert.equal(readArgs(['a.md']).noAnchors, false);
+  assert.equal(readArgs(['--no-anchors', 'a.md']).noAnchors, true);
+});
+
 test('readArgs cache options', () => {
   const none = readArgs(['a.md']);
   assert.deepEqual([none.cache, none.cacheFile, none.cacheTtl], [false, undefined, undefined]);
