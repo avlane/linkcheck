@@ -1,7 +1,7 @@
 # linkcheck
 
 A link checker for Markdown files. No dependencies; uses the `fetch` that
-ships with Node 18.
+ships with Node and needs Node 20 or newer.
 
     node bin/linkcheck.js README.md
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { exitCode, formatGithub, formatJson, formatText, summarize } from '../lib/report.js';
+import { byLocation, exitCode, formatGithub, formatJson, formatText, summarize } from '../lib/report.js';
 
 const result = (status, extra = {}) => ({ file: 'a.md', line: 1, column: 1, url: 'https://example.com/', kind: 'link', status, ...extra });
 
@@ -11,6 +11,18 @@ const results = [
   result('skipped', { url: 'mailto:me@example.com', message: 'mailto: links are not checked' }),
   result('broken', { line: 9, url: '', message: 'no definition for the reference [x]' })
 ];
+
+test('byLocation orders by file, line and column without touching the input', () => {
+  const unsorted = [
+    result('ok', { file: 'b.md', line: 1, column: 1 }),
+    result('ok', { file: 'a.md', line: 10, column: 1 }),
+    result('ok', { file: 'a.md', line: 2, column: 9 }),
+    result('ok', { file: 'a.md', line: 2, column: 3 })
+  ];
+  const sorted = unsorted.toSorted(byLocation);
+  assert.deepEqual(sorted.map(r => [r.file, r.line, r.column]), [['a.md', 2, 3], ['a.md', 2, 9], ['a.md', 10, 1], ['b.md', 1, 1]]);
+  assert.equal(unsorted[0].file, 'b.md');
+});
 
 test('summarize counts each status', () => {
   assert.deepEqual(summarize(results, 2), { files: 2, links: 5, ok: 1, warnings: 1, broken: 2, skipped: 1 });
