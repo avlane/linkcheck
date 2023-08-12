@@ -55,6 +55,7 @@ class Sink extends Writable {
 export async function runCli(args, extra = {}) {
   const stdout = new Sink();
   const stderr = new Sink();
+  if (extra.stderrIsTTY) stderr.isTTY = true;
   const code = await run(args, { stdout, stderr, ...extra });
   return { code, out: stdout.text, err: stderr.text };
 }

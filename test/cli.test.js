@@ -252,6 +252,54 @@ test('cli checks anchors in other files, and --no-anchors does not', async () =>
   assert.equal(lenient.code, 0);
 });
 
+test('cli checks every URL once even when several files use it', async () => {
+  const dir = makeDir({ 'a.md': '[x](https://example.com/shared)\n', 'b.md': '[y](https://example.com/shared)\n[z](https://example.com/b)\n' });
+  try {
+    const fetch = makeFetch({ 'https://example.com/shared': 200, 'https://example.com/b': 200 });
+    const { code } = await runCli(['--no-config', dir], { fetch });
+    assert.equal(code, 0);
+    assert.deepEqual(fetch.calls.map(call => call.url).sort(), ['https://example.com/b', 'https://example.com/shared']);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli --quiet and --verbose', async () => {
+  const dir = makeDir({ 'a.md': '[x](https://example.com/x) [m](mailto:me@example.com) [l](b.md)\n', 'b.md': '# B\n' });
+  try {
+    const fetch = makeFetch({ 'https://example.com/x': 200 });
+    const file = path.join(dir, 'a.md');
+    assert.equal((await runCli(['--no-config', '--quiet', file], { fetch })).out, '');
+    const verbose = await runCli(['--no-config', '--verbose', file], { fetch });
+    const lines = verbose.out.trimEnd().split('\n');
+    assert.equal(lines.length, 4);
+    assert.match(lines[0], /a\.md:1:\d+  ok  https:\/\/example\.com\/x$/);
+    assert.match(lines[1], /a\.md:1:\d+  skipped  mailto:me@example\.com  mailto: links are not checked$/);
+    assert.equal(lines[3], '3 links in 1 file: 2 ok, 0 warnings, 0 broken, 1 skipped');
+    assert.equal((await runCli(['-q', '-v', file])).code, 2);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli shows a progress counter on a terminal only', async () => {
+  const dir = makeDir({ 'a.md': '[x](https://example.com/x) [y](https://example.com/y)\n' });
+  try {
+    const fetch = makeFetch({ 'https://example.com/x': 200, 'https://example.com/y': 200 });
+    const tty = await runCli(['--no-config', path.join(dir, 'a.md')], { fetch, stderrIsTTY: true });
+    assert.match(tty.err, /\rchecked 1\/2 links/);
+    assert.match(tty.err, /\rchecked 2\/2 links/);
+    assert.ok(tty.err.endsWith('\r\u001b[K'));
+    assert.equal(tty.out, 'all links ok\n');
+    const piped = await runCli(['--no-config', path.join(dir, 'a.md')], { fetch });
+    assert.equal(piped.err, '');
+    const json = await runCli(['--no-config', '--json', path.join(dir, 'a.md')], { fetch, stderrIsTTY: true });
+    assert.equal(json.err, '');
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test('cli --timeout is passed on and validated', async () => {
   const fetch = makeFetch(ALL_OK);
   await runCli(['--timeout', '2500', docs('faq.md')], { fetch });

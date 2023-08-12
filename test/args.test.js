@@ -25,6 +25,13 @@ test('readArgs rejects bad numbers', () => {
   assert.throws(() => readArgs(['--nope']), UsageError);
 });
 
+test('readArgs --quiet and --verbose', () => {
+  assert.deepEqual([readArgs(['a.md']).quiet, readArgs(['a.md']).verbose], [false, false]);
+  assert.equal(readArgs(['-q', 'a.md']).quiet, true);
+  assert.equal(readArgs(['--verbose', 'a.md']).verbose, true);
+  assert.throws(() => readArgs(['-q', '-v', 'a.md']), /--quiet and --verbose cannot be used together/);
+});
+
 test('readArgs --no-anchors', () => {
   assert.equal(readArgs(['a.md']).noAnchors, false);
   assert.equal(readArgs(['--no-anchors', 'a.md']).noAnchors, true);

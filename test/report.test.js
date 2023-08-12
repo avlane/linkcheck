@@ -39,6 +39,21 @@ test('formatText lists broken links and warnings, then a summary', () => {
   ].join('\n'));
 });
 
+test('formatText quiet leaves out the summary', () => {
+  assert.equal(formatText([result('ok')], summarize([result('ok')], 1), { quiet: true }), '');
+  const bad = [result('broken', { message: '404 Not Found' })];
+  assert.equal(formatText(bad, summarize(bad, 1), { quiet: true }), 'a.md:1:1  broken  https://example.com/  404 Not Found\n');
+});
+
+test('formatText verbose lists every link and counts per status', () => {
+  const text = formatText(results, summarize(results, 1), { verbose: true });
+  const lines = text.trimEnd().split('\n');
+  assert.equal(lines.length, 6);
+  assert.equal(lines[0], 'a.md:1:1  ok  https://example.com/');
+  assert.equal(lines[3], 'a.md:1:1  skipped  mailto:me@example.com  mailto: links are not checked');
+  assert.equal(lines[5], '5 links in 1 file: 1 ok, 1 warning, 2 broken, 1 skipped');
+});
+
 test('formatText with nothing to report', () => {
   const clean = [result('ok'), result('skipped')];
   assert.equal(formatText(clean, summarize(clean, 1)), 'all links ok\n');
