@@ -300,6 +300,27 @@ test('cli shows a progress counter on a terminal only', async () => {
   }
 });
 
+test('cli root-relative links: skipped, looked up with --root, or checked with --base-url', async () => {
+  const dir = makeDir({ 'site/docs/a.md': '[g](/docs/b.md) [m](/missing.md) [i](/img/pic.png)\n', 'site/docs/b.md': '# B\n', 'site/img/pic.png': 'x' });
+  try {
+    const file = path.join(dir, 'site', 'docs', 'a.md');
+    const skipped = await runCli(['--no-config', '--verbose', file]);
+    assert.equal(skipped.code, 0);
+    assert.equal((skipped.out.match(/root-relative links need --root or --base-url/g) ?? []).length, 3);
+    const rooted = await runCli(['--no-config', '--root', path.join(dir, 'site'), file]);
+    assert.equal(rooted.code, 1);
+    assert.match(rooted.out, /a\.md:1:\d+  broken  \/missing\.md  no such file: \/missing\.md\n1 broken link\n$/);
+    const fetch = makeFetch({ 'https://docs.example.com/docs/b.md': 200, 'https://docs.example.com/img/pic.png': 200 });
+    const based = await runCli(['--no-config', '--base-url', 'https://docs.example.com/', file], { fetch });
+    assert.deepEqual(fetch.calls.map(call => call.url).sort(), [
+      'https://docs.example.com/docs/b.md', 'https://docs.example.com/img/pic.png', 'https://docs.example.com/missing.md'
+    ]);
+    assert.equal(based.code, 1);
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test('cli --timeout is passed on and validated', async () => {
   const fetch = makeFetch(ALL_OK);
   await runCli(['--timeout', '2500', docs('faq.md')], { fetch });

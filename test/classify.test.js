@@ -21,6 +21,11 @@ test('classifyLink relative paths', () => {
   assert.deepEqual(classifyLink('bad%escape.md'), { type: 'local', path: 'bad%escape.md', fragment: '' });
 });
 
+test('classifyLink root-relative paths are marked', () => {
+  assert.deepEqual(classifyLink('/docs/guide.md#top'), { type: 'local', path: '/docs/guide.md', fragment: 'top', rootRelative: true });
+  assert.equal(classifyLink('docs/guide.md').rootRelative, undefined);
+});
+
 test('classifyLink other schemes are skipped', () => {
   assert.deepEqual(classifyLink('mailto:me@example.com'), { type: 'skipped', reason: 'mailto: links are not checked' });
   assert.equal(classifyLink('tel:+15550100').type, 'skipped');

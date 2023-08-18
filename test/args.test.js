@@ -25,6 +25,13 @@ test('readArgs rejects bad numbers', () => {
   assert.throws(() => readArgs(['--nope']), UsageError);
 });
 
+test('readArgs --root and --base-url', () => {
+  const args = readArgs(['--root', 'site', '--base-url', 'https://example.com/', 'a.md']);
+  assert.deepEqual([args.root, args.baseUrl], ['site', 'https://example.com/']);
+  assert.deepEqual([readArgs(['a.md']).root, readArgs(['a.md']).baseUrl], [undefined, undefined]);
+  assert.throws(() => readArgs(['--base-url', 'example.com']), /--base-url must be a full URL/);
+});
+
 test('readArgs --quiet and --verbose', () => {
   assert.deepEqual([readArgs(['a.md']).quiet, readArgs(['a.md']).verbose], [false, false]);
   assert.equal(readArgs(['-q', 'a.md']).quiet, true);

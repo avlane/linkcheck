@@ -21,6 +21,13 @@ test('loadConfig reads known settings', () => {
   });
 });
 
+test('loadConfig root and baseUrl', () => {
+  const config = withConfig('{"root": "site", "baseUrl": "https://example.com/"}', loadConfig);
+  assert.deepEqual(config, { root: 'site', baseUrl: 'https://example.com/' });
+  withConfig('{"root": 5}', file => assert.throws(() => loadConfig(file), /"root" must be a non-empty string/));
+  withConfig('{"baseUrl": ""}', file => assert.throws(() => loadConfig(file), /"baseUrl" must be a non-empty string/));
+});
+
 test('loadConfig a missing file is fine unless required', () => {
   withConfig(undefined, file => {
     assert.deepEqual(loadConfig(file), {});

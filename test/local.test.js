@@ -43,6 +43,14 @@ test('checkLocal anchors in other Markdown files', () => {
   assert.equal(check('../docs/guide.md#nope', 'faq.md').message, 'no heading with the anchor #nope in ../docs/guide.md');
 });
 
+test('checkLocal root-relative links are looked up below the root', () => {
+  const link = { file: path.join(docs, 'images', 'x.md'), line: 1, column: 1, url: '/guide.md#setup', kind: 'link' };
+  const target = classifyLink(link.url);
+  assert.equal(checkLocal(link, target, { anchors, root: docs }).status, 'ok');
+  const missing = { ...link, url: '/nope.md' };
+  assert.equal(checkLocal(missing, classifyLink('/nope.md'), { anchors, root: docs }).message, 'no such file: /nope.md');
+});
+
 test('checkLocal fragments on files that are not Markdown are not checked', () => {
   assert.equal(check('images/logo.svg#L1').status, 'ok');
   assert.equal(check('images#anything').status, 'ok');
