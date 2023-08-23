@@ -321,6 +321,22 @@ test('cli root-relative links: skipped, looked up with --root, or checked with -
   }
 });
 
+test('cli reports malformed URLs and empty mailto links without any request', async () => {
+  const dir = makeDir({ 'a.md': '[a](http://) [b](mailto:) [c](mailto:me@example.com) [d](http://exa%mple.com/)\n[e](https://example.com/ok)\n' });
+  try {
+    const fetch = makeFetch({ 'https://example.com/ok': 200 });
+    const { code, out } = await runCli(['--no-config', path.join(dir, 'a.md')], { fetch });
+    assert.equal(code, 1);
+    assert.match(out, /broken  http:\/\/  not a valid URL\n/);
+    assert.match(out, /broken  mailto:  mailto: link without a valid email address\n/);
+    assert.match(out, /broken  http:\/\/exa%mple\.com\/  not a valid URL\n/);
+    assert.ok(out.endsWith('3 broken links\n'), out);
+    assert.deepEqual(fetch.calls.map(call => call.url), ['https://example.com/ok']);
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test('cli --timeout is passed on and validated', async () => {
   const fetch = makeFetch(ALL_OK);
   await runCli(['--timeout', '2500', docs('faq.md')], { fetch });

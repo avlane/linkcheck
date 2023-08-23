@@ -26,6 +26,21 @@ test('classifyLink root-relative paths are marked', () => {
   assert.equal(classifyLink('docs/guide.md').rootRelative, undefined);
 });
 
+test('classifyLink malformed URLs are invalid', () => {
+  assert.deepEqual(classifyLink('http://'), { type: 'invalid', reason: 'not a valid URL' });
+  assert.deepEqual(classifyLink('https://exa mple.com/'), { type: 'invalid', reason: 'not a valid URL' });
+  assert.deepEqual(classifyLink('//'), { type: 'invalid', reason: 'not a valid URL' });
+  assert.equal(classifyLink('https://example.com/a b').type, 'external');
+});
+
+test('classifyLink mailto links need an address', () => {
+  assert.equal(classifyLink('mailto:me@example.com?subject=Hi').type, 'skipped');
+  assert.equal(classifyLink('MAILTO:me%40example.com').type, 'skipped');
+  assert.deepEqual(classifyLink('mailto:'), { type: 'invalid', reason: 'mailto: link without a valid email address' });
+  assert.equal(classifyLink('mailto:not-an-address').type, 'invalid');
+  assert.equal(classifyLink('mailto:two words@example.com').type, 'invalid');
+});
+
 test('classifyLink other schemes are skipped', () => {
   assert.deepEqual(classifyLink('mailto:me@example.com'), { type: 'skipped', reason: 'mailto: links are not checked' });
   assert.equal(classifyLink('tel:+15550100').type, 'skipped');

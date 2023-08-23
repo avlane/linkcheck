@@ -92,6 +92,11 @@ test('extractLinks bare URLs lose trailing punctuation', () => {
   assert.deepEqual(urls('https://example.org/wiki/Foo_(bar) works'), ['https://example.org/wiki/Foo_(bar)']);
 });
 
+test('extractLinks bare URLs lose closing quotes and brackets too', () => {
+  assert.deepEqual(urls('He said "see https://example.com/a" and [https://example.com/b] and {https://example.com/c}'),
+    ['https://example.com/a', 'https://example.com/b', 'https://example.com/c']);
+});
+
 test('extractLinks a URL is only reported once when it is also link syntax', () => {
   assert.deepEqual(summary('[https://example.com/x](https://example.com/x) and <https://example.com/y>').map(l => l[0]),
     ['link', 'autolink']);
