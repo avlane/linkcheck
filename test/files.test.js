@@ -47,6 +47,10 @@ test('collectMarkdown exclude globs', () => {
   }
 });
 
+test('collectMarkdown passes - through for standard input', () => {
+  assert.deepEqual(collectMarkdown(['-']), ['-']);
+});
+
 test('collectMarkdown reports paths that do not exist', () => {
   assert.throws(() => collectMarkdown(['/definitely/not/here']), FileError);
   assert.throws(() => collectMarkdown(['/definitely/not/here']), /cannot read \/definitely\/not\/here/);

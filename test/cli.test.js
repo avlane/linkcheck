@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { makeDir, makeFetch, removeDir, runCli } from './helpers.js';
 
@@ -332,6 +333,23 @@ test('cli reports malformed URLs and empty mailto links without any request', as
     assert.match(out, /broken  http:\/\/exa%mple\.com\/  not a valid URL\n/);
     assert.ok(out.endsWith('3 broken links\n'), out);
     assert.deepEqual(fetch.calls.map(call => call.url), ['https://example.com/ok']);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test('cli reads a document from standard input', async () => {
+  const dir = makeDir({ 'other.md': '# Other\n\n## Part\n' });
+  try {
+    const stdin = Readable.from(['# Mine\n\nSee [other](other.md#part), [gone](gone.md), [self](#mine), [bad](#nope) and [web](https://example.com/w).\n']);
+    const fetch = makeFetch({ 'https://example.com/w': 200 });
+    const { code, out } = await runCli(['--no-config', '-'], { stdin, fetch, cwd: dir });
+    assert.equal(code, 1);
+    const lines = out.trimEnd().split('\n');
+    assert.equal(lines.length, 3);
+    assert.match(lines[0], /^<stdin>:3:\d+  broken  gone\.md  no such file: gone\.md$/);
+    assert.match(lines[1], /^<stdin>:3:\d+  broken  #nope  no heading with the anchor #nope in this file$/);
+    assert.equal(lines[2], '2 broken links');
   } finally {
     removeDir(dir);
   }
